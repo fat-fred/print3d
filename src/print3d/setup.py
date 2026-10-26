@@ -41,7 +41,14 @@ class Change:
 
 
 def server_command() -> list[str]:
-    return [sys.executable, "-m", "print3d", "mcp"]
+    """The MCP server's command line, with -I (isolated mode).
+
+    Agents start MCP servers in the user's project folder, and `python -m`
+    puts the current directory first on the module path: a `json.py` or
+    `ssl.py` there would run inside print3d. -I keeps the current directory,
+    PYTHON* variables and the user site-packages out.
+    """
+    return [sys.executable, "-I", "-m", "print3d", "mcp"]
 
 
 def _backup(path: Path) -> None:

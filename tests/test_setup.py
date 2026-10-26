@@ -14,6 +14,11 @@ def _apply(home, agents, which=lambda _: None, run=None):
         change.apply()
 
 
+def test_the_server_runs_isolated_from_the_current_directory():
+    # Agents start MCP servers in a project folder; without -I a ssl.py or json.py there would run inside print3d.
+    assert setup.server_command() == [sys.executable, "-I", "-m", "print3d", "mcp"]
+
+
 def test_only_agents_present_are_planned(tmp_path):
     (tmp_path / ".cursor").mkdir()
     which = {"codex": "/bin/codex"}.get
@@ -30,6 +35,7 @@ def test_codex_section_is_added_once_and_keeps_the_rest(tmp_path):
     assert text.count("[mcp_servers.print3d]") == 1
     assert 'model = "o5"' in text and "[mcp_servers.other]" in text
     assert json.dumps(sys.executable) in text
+    assert tomllib.loads(text)["mcp_servers"]["print3d"]["args"] == ["-I", "-m", "print3d", "mcp"]
     assert list(config.parent.glob("config.toml.print3d-backup-*"))
 
 
@@ -85,7 +91,7 @@ def test_json_configs_keep_other_servers(tmp_path):
     config = json.loads(settings.read_text())
     assert config["theme"] == "dark"
     assert set(config["mcpServers"]) == {"other", "print3d"}
-    assert config["mcpServers"]["print3d"]["args"] == ["-m", "print3d", "mcp"]
+    assert config["mcpServers"]["print3d"]["args"] == ["-I", "-m", "print3d", "mcp"]
 
 
 def test_broken_json_is_left_alone(tmp_path):
@@ -110,7 +116,7 @@ def test_claude_gets_the_skill_linked_and_the_server_added(tmp_path):
     assert old.resolve() == skill_dir()
     assert list(old.parent.glob("print3d.print3d-backup-*"))
     assert calls[-1][:6] == ["/bin/claude", "mcp", "add", "--scope", "user", "print3d"]
-    assert calls[-1][-3:] == ["-m", "print3d", "mcp"]
+    assert calls[-1][6:] == ["--", sys.executable, "-I", "-m", "print3d", "mcp"]
 
 
 def test_hermes_gets_the_skill_linked_and_the_server_added_once(tmp_path):
@@ -135,7 +141,7 @@ def test_hermes_gets_the_skill_linked_and_the_server_added_once(tmp_path):
     text = config.read_text()
     assert (hermes / "skills" / "print3d").resolve() == skill_dir()
     assert text.count("  print3d:") == 1 and "/old/python" not in text
-    assert json.dumps(sys.executable) in text
+    assert json.dumps(sys.executable) in text and 'args: ["-I", "-m", "print3d", "mcp"]' in text
     assert "  other:\n    command: npx\n" in text
     assert text.startswith("model: x\n") and text.endswith("skills:\n  disabled: []\n")
 
