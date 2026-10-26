@@ -135,6 +135,48 @@ limits it to one agent. Restart your agent afterwards.
 
 To update, run `uv tool upgrade print3d`, then `print3d setup` again.
 
+## Other printers
+
+print3d targets the Bambu Lab X2D by default. It also knows the X1 Carbon with
+a 0.4 mm nozzle. Pick the printer once; it is kept in `~/print3d/printer.json`
+(override the path with `PRINT3D_PRINTER`):
+
+```bash
+print3d printer show
+print3d printer set --printer x1c-0.4
+```
+
+Bed size, nozzle count and the default plate come from the pinned profiles for
+that printer. The checks, the colour note (one nozzle means an AMS swap) and the
+hand-off header follow the choice. Without a `printer.json`, nothing changes
+from the X2D behaviour.
+
+Record which build plates you own and which one you use per material, so jobs
+slice for the plate on your printer:
+
+```bash
+print3d printer set --owned "Textured PEI Plate,Cool Plate" --plate PLA="Cool Plate"
+```
+
+For a single job, name the plate on the command:
+
+```bash
+print3d make "a 40mm nameplate that says MARCO" --script examples/nameplate.py --bed "Textured PEI Plate"
+print3d slice model.stl --bed "Cool Plate"
+```
+
+`--bed` takes Cool Plate, Engineering Plate, High Temp Plate, Textured PEI Plate
+or Supertack Plate. In the MCP tools, `make` has the same `bed` argument.
+`print3d status` shows the chosen printer, the plates you own and the bed size.
+
+To rebuild the pinned presets for a printer from a Bambu Studio install:
+
+```bash
+print3d flatten --printer x1c-0.4
+```
+
+The X1 Carbon presets are pinned from Bambu Studio 02.08.02.61.
+
 ## Command line
 
 The same steps, without an agent:
@@ -164,7 +206,8 @@ fill in and run again.
 | `fit show` / `fit set` | The clearance per fit that scripts get as `params["fit"]`, and recording yours |
 | `plan model.stl out.gcode.3mf` | Show the Studio command without running it |
 | `status` | Where Blender and Studio were found |
-| `flatten` | Rebuild the X2D presets in `src/print3d/profiles/x2d-0.4/` |
+| `printer show` / `printer set` | The printer, the plates you own and the plate per material |
+| `flatten` | Rebuild the pinned presets of a printer, `--printer KEY` (default: the chosen one) |
 | `setup` | Register print3d with your agents |
 | `mcp` | Run the MCP server on stdio (agents launch this) |
 
