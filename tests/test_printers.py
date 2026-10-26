@@ -117,3 +117,13 @@ def test_machine_line_from_report_and_fallback():
         "Bambu Lab X1 Carbon, 0.4 mm nozzle, 0.20 mm layers, Bambu PLA Basic, Cool Plate, supports off"
     )
     assert machine_line({}).startswith("Bambu Lab X2D, ")
+
+
+def test_bed_reaches_the_slice_command(tmp_path, cube_stl):
+    save_printer(owned=["Textured PEI Plate", "Cool Plate"], by_material={"PLA": "Cool Plate"})
+    report = run_job("cube", mesh=cube_stl, jobs_dir=tmp_path / "jobs", execute=False)
+    command = report["slice_plan"]["command"]
+    assert command[command.index("--curr-bed-type") + 1] == "Cool Plate"
+    assert (report["printer"], report["bed_type"]) == ("x2d-0.4", "Cool Plate")
+    report = run_job("cube", mesh=cube_stl, bed="Textured PEI Plate", jobs_dir=tmp_path / "jobs", execute=False)
+    assert report["bed_type"] == "Textured PEI Plate"

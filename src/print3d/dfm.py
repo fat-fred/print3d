@@ -147,8 +147,8 @@ def check_mesh(path: Path, *, bed_mm: tuple[float, float, float] | None = None) 
     return DfmReport(ok=not errors, stats=stats, errors=tuple(errors), warnings=tuple(warnings))
 
 
-def require_printable(path: Path) -> DfmReport:
-    report = check_mesh(path)
+def require_printable(path: Path, *, bed_mm: tuple[float, float, float] | None = None) -> DfmReport:
+    report = check_mesh(path, bed_mm=bed_mm)
     if not report.ok:
         raise DfmError("; ".join(report.errors))
     return report

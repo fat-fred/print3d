@@ -1,11 +1,13 @@
 import json
 import os
+import zipfile
 from pathlib import Path
 
 import pytest
 
 from print3d.paths import repo_root
 from print3d.pipeline import run_job
+from print3d.printers import save_printer
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("PRINT3D_STUDIO_IT") != "1",
@@ -186,3 +188,13 @@ def test_hinged_tin_from_a_museum_photo(tmp_path: Path, monkeypatch):
     }
     assert {f["color"] for f in report["filaments"]} == {"gold", "black"}
     assert len(report["plates"]) == 1
+
+
+def test_x1c_cube_slice_records_printer_and_bed(tmp_path: Path, cube_stl: Path):
+    save_printer(key="x1c-0.4", owned=["Textured PEI Plate", "Cool Plate"])
+    report = run_job("x1c cube", mesh=cube_stl, bed="Cool Plate", jobs_dir=tmp_path / "jobs")
+    assert report["status"] == "ready_for_review"
+    with zipfile.ZipFile(report["slice_result"]["output_3mf"]) as z:
+        settings = json.loads(z.read("Metadata/project_settings.config"))
+    assert settings["printer_model"] == "Bambu Lab X1 Carbon"
+    assert settings["curr_bed_type"] == "Cool Plate"

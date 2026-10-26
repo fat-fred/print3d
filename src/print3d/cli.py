@@ -19,7 +19,15 @@ from print3d.paths import coupon_script, default_profiles_dir, job_path, safe_na
 from print3d.photo import grid, meet
 from print3d.pipeline import _model_params, run_job
 from print3d.printability import advise, analyze_mesh, analyze_slice
-from print3d.printers import PRINTERS, PrinterError, current_printer, load_printer, save_printer
+from print3d.printers import (
+    BED_TYPES,
+    PRINTERS,
+    PrinterError,
+    current_printer,
+    load_printer,
+    machine_facts,
+    save_printer,
+)
 from print3d.project import inspect_project
 from print3d.studio import SliceRequest, find_studio, slice_plan
 from print3d.viewer import build_viewer
@@ -36,6 +44,7 @@ def cmd_make(args: argparse.Namespace) -> int:
         script=Path(args.script) if args.script else None,
         mesh=Path(args.mesh) if args.mesh else None,
         color=args.color,
+        bed=args.bed,
         execute=not args.dry_run,
     )
     _print_json(report)
@@ -52,7 +61,7 @@ def cmd_model(args: argparse.Namespace) -> int:
 
 def cmd_slice(args: argparse.Namespace) -> int:
     mesh = Path(args.mesh)
-    report = run_job(args.prompt or f"slice {mesh.name}", mesh=mesh, execute=not args.dry_run)
+    report = run_job(args.prompt or f"slice {mesh.name}", mesh=mesh, bed=args.bed, execute=not args.dry_run)
     _print_json(report)
     return 1 if report.get("severity") == "error" else 0
 
@@ -260,6 +269,7 @@ def cmd_status(_args: argparse.Namespace) -> int:
             "printer": printer.key,
             "printer_name": printer.name,
             "beds_owned": load_printer()["owned"],
+            "bed_mm": list(machine_facts(profiles).bed_mm),
             "profiles": str(profiles),
             "profiles_present": all(
                 (profiles / name).is_file()
@@ -298,6 +308,7 @@ def build_parser() -> argparse.ArgumentParser:
     make_cmd.add_argument("--script", help="Blender model script (default: jobs/<slug>/model.py)")
     make_cmd.add_argument("--mesh", help="Skip modelling and use this STL")
     make_cmd.add_argument("--color")
+    make_cmd.add_argument("--bed", choices=BED_TYPES, help="Build plate (default: the printer's choice for the material)")
     make_cmd.add_argument("--dry-run", action="store_true")
     make_cmd.set_defaults(func=cmd_make)
 
@@ -311,6 +322,7 @@ def build_parser() -> argparse.ArgumentParser:
     slice_cmd = sub.add_parser("slice", help="Slice an existing mesh")
     slice_cmd.add_argument("mesh")
     slice_cmd.add_argument("--prompt", default="")
+    slice_cmd.add_argument("--bed", choices=BED_TYPES, help="Build plate (default: the printer's choice for the material)")
     slice_cmd.add_argument("--dry-run", action="store_true")
     slice_cmd.set_defaults(func=cmd_slice)
 

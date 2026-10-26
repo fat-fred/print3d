@@ -34,7 +34,7 @@ from print3d.printability import (
     with_clean,
     worst_severity,
 )
-from print3d.printers import current_printer, machine_facts
+from print3d.printers import bed_for, current_printer, machine_facts
 from print3d.project import extract_plate_png, inspect_project
 from print3d.spec import load_spec, model_dims
 from print3d.studio import SliceRequest, assemble_list, run_slice, slice_plan
@@ -100,21 +100,31 @@ def run_job(
     script: Path | None = None,
     mesh: Path | None = None,
     color: str | None = None,
+    bed: str | None = None,
     execute: bool = True,
     jobs_dir: Path | None = None,
     profiles_dir: Path | None = None,
 ) -> dict[str, Any]:
     brief = parse_brief(prompt, color=color)
+    printer = current_printer()
+    bed_type = bed_for(brief.material, bed)
     job_dir = (jobs_dir or default_jobs_dir()) / brief.slug
     job_dir.mkdir(parents=True, exist_ok=True)
     # Modelling can overwrite meshes before a failure or a dry-run return.
     # Invalidate the previous slice's report before touching any job artifacts.
-    report: dict[str, Any] = {"brief": brief.as_dict(), "job_dir": str(job_dir), "status": "running"}
+    report: dict[str, Any] = {
+        "brief": brief.as_dict(),
+        "job_dir": str(job_dir),
+        "printer": printer.key,
+        "printer_name": printer.name,
+        "bed_type": bed_type,
+        "status": "running",
+    }
     _save_report(job_dir, report)
     try:
         result = _run_job(
             brief, job_dir, report, script=script, mesh=mesh, execute=execute,
-            profiles=profiles_dir or default_profiles_dir(),
+            profiles=profiles_dir or default_profiles_dir(), bed_type=bed_type,
         )
     except Exception as exc:
         report.update(status="failed", error=str(exc))
@@ -133,6 +143,7 @@ def _run_job(
     mesh: Path | None,
     execute: bool,
     profiles: Path,
+    bed_type: str,
 ) -> dict[str, Any]:
     for required in ("machine.json", "process.json", "filament.json"):
         if not (profiles / required).is_file():
@@ -169,10 +180,10 @@ def _run_job(
         report["model"]["source"] = "blender"
 
     if report["model"].get("parts"):
-        return _run_parts(brief, job_dir, profiles, spec, fits, mesh_path, report, execute)
+        return _run_parts(brief, job_dir, profiles, spec, fits, mesh_path, report, execute, bed_type)
 
     # 3. Is it even a solid?
-    dfm = require_printable(mesh_path)
+    dfm = require_printable(mesh_path, bed_mm=machine_facts(profiles).bed_mm)
     report["dfm"] = dfm.as_dict()
     mesh_metrics = analyze_mesh(mesh_path)
     report["mesh_metrics"] = mesh_metrics
@@ -197,6 +208,7 @@ def _run_job(
         # Auto-orient would silently rotate the part and invalidate every
         # overhang note below. Orientation is the model script's business.
         orient=False,
+        bed_type=bed_type,
     )
     report["slice_plan"] = slice_plan(request)
 
@@ -287,6 +299,7 @@ def _run_parts(
     assembly: Path,
     report: dict[str, Any],
     execute: bool,
+    bed_type: str,
 ) -> dict[str, Any]:
     """Several printed parts: a check per printed object, fits between them, one slice for all."""
     model = report["model"]
@@ -315,8 +328,9 @@ def _run_parts(
     notes: list[Advice] = []
     errors: list[str] = []
     metrics: dict[str, dict[str, Any]] = {}
+    bed_mm = machine_facts(profiles).bed_mm
     for obj in model["objects"]:
-        dfm = check_mesh(Path(obj["stl"]))
+        dfm = check_mesh(Path(obj["stl"]), bed_mm=bed_mm)
         errors.extend(f"{obj['name']}: {error}" for error in dfm.errors)
         metrics[obj["name"]] = analyze_mesh(Path(obj["stl"]))
         notes.extend(mesh_advice(metrics[obj["name"]], part=obj["name"]))
@@ -388,6 +402,7 @@ def _run_parts(
         output_dir=slice_dir,
         orient=False,
         assemble_list=assemble,
+        bed_type=bed_type,
     )
     report["slice_plan"] = slice_plan(request)
 

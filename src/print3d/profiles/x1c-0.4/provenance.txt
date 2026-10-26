@@ -12,4 +12,4 @@ because the Studio CLI does not walk the GUI inheritance chain.
 enable_support is "0" in the system profile; no override was needed.
 
 Rebuild with: print3d flatten --printer x1c-0.4
-Golden cube slice: pending (Task 5)
+Golden cube: tests/fixtures/cube_20mm.stl → 100 layers, 3.88 g, 15m 52s
