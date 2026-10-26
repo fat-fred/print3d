@@ -10,5 +10,5 @@ Bed: Textured PEI Plate
 These JSON files are flattened (inherits + include resolved, from=User)
 because the Studio CLI does not walk the GUI inheritance chain.
 
-Rebuild with: python -m print3d flatten
+Rebuild with: print3d flatten --printer x2d-0.4
 Golden cube slice: tests/fixtures/cube_20mm.gcode.3mf (100 layers, 3.63 g, 13m 52s)

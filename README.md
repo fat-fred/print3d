@@ -2,10 +2,10 @@
 
 A [Hermes Agent](https://github.com/NousResearch/hermes-agent) plugin that turns
 an idea, a photo of an object, or the shop listing of something you would
-otherwise buy into a Bambu Studio project for a **Bambu Lab X2D (0.4 mm
-nozzle)**. One part or several, in one colour or two, with fits measured against
-your own printer, a 3D view to turn the result around in, and a print sheet to
-hand on. It also works with Claude Code, Codex, Cursor and Gemini CLI.
+otherwise buy into a Bambu Studio project for a **Bambu Lab X2D or X1 Carbon
+(0.4 mm nozzle)**. One part or several, in one colour or two, with fits measured
+against your own printer, a 3D view to turn the result around in, and a print
+sheet to hand on. It also works with Claude Code, Codex, Cursor and Gemini CLI.
 
 ![From a museum photo of a wooden peg to a sliced, printable model, in eight steps](docs/workflow.gif)
 
@@ -146,13 +146,16 @@ print3d printer show
 print3d printer set --printer x1c-0.4
 ```
 
-Bed size, nozzle count and the default plate come from the pinned profiles for
-that printer. The checks, the colour note (one nozzle means an AMS swap) and the
-hand-off header follow the choice. Without a `printer.json`, nothing changes
-from the X2D behaviour.
+Bed size, nozzle count, the default plate and the plates the printer can use
+come from the pinned profiles for that printer. The checks, the colour note (one
+nozzle means an AMS swap) and the hand-off header follow the choice. Without a
+`printer.json`, print3d behaves as before on the X2D, except that the bed height
+check now uses the 261 mm of the pinned X2D profile (what Studio enforces)
+instead of 260 mm. The MCP server names the printer to the agent when it starts:
+restart your agent after `print3d printer set`.
 
 Record which build plates you own and which one you use per material, so jobs
-slice for the plate on your printer:
+slice for the plate on your printer. On the X1 Carbon, for example:
 
 ```bash
 print3d printer set --owned "Textured PEI Plate,Cool Plate" --plate PLA="Cool Plate"
@@ -162,12 +165,15 @@ For a single job, name the plate on the command:
 
 ```bash
 print3d make "a 40mm nameplate that says MARCO" --script examples/nameplate.py --bed "Textured PEI Plate"
-print3d slice model.stl --bed "Cool Plate"
+print3d slice model.stl --bed "Supertack Plate"
 ```
 
 `--bed` takes Cool Plate, Engineering Plate, High Temp Plate, Textured PEI Plate
-or Supertack Plate. In the MCP tools, `make` has the same `bed` argument.
-`print3d status` shows the chosen printer, the plates you own and the bed size.
+or Supertack Plate. In the MCP tools, `make` has the same `bed` argument. Not
+every plate suits every printer: the X2D profile rules out the Cool Plate, and
+Bambu PLA Basic for the X1 Carbon has no Engineering Plate temperature. A job on such a plate is
+refused before anything is modelled. `print3d status` shows the chosen printer,
+the plates you own, the plates it supports (`beds_supported`) and the bed size.
 
 To rebuild the pinned presets for a printer from a Bambu Studio install:
 
@@ -358,7 +364,8 @@ Replay it with `pytest tests/test_bracket_benchmark.py`; rebuild the media with
 Most things worth designing are more than one solid. Model every part where it
 sits when assembled, name it, and say how it turns to print. The run checks each
 printed object on its own, measures the gaps between parts, gives each colour its
-own filament on the X2D's two nozzles, and slices all of it into one project.
+own filament (on the X2D's two nozzles, or swapped by the AMS on the X1 Carbon's
+one), and slices all of it into one project.
 
 ```python
 c = params["fit"]["slide"]                       # this printer's slide clearance

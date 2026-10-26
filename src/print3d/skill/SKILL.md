@@ -82,6 +82,11 @@ print3d make "<prompt>"
 Models, DFM-checks, slices with the pinned presets, and reports. The run is
 **red** when `severity` is `error` — exit code 1, `status: needs_work`.
 
+Pass `bed` (`--bed`) only when the user names a plate for this job. Otherwise
+the run takes the plate set for the material in `printer.json`, else the
+printer's default. A plate the printer or its filament cannot use is refused
+with the plates that work: ask the user which of those they have.
+
 While red: read `advice`, apply the `fix` each note carries to `model.py`, run
 again. Each note is phrased as a change to the model, because that is where the
 fix lives. `jobs/<slug>/history.jsonl` accumulates what each iteration changed.
@@ -122,15 +127,16 @@ jobs/<slug>/slice/<slug>.3mf
 ```
 
 That is the project file. The `.gcode.3mf` beside it is a sliced job and
-Studio's Prepare tab rejects it as having no geometry. Tell the user to open the
-`.3mf`, check the preview, and print from Studio — and offer another iteration
-if the preview is not what they wanted.
+Studio's Prepare tab rejects it as having no geometry. Tell the user which plate
+to put on the printer, the report's `bed_type`: the temperatures are set for it.
+Then tell them to open the `.3mf`, check the preview, and print from Studio —
+and offer another iteration if the preview is not what they wanted.
 
 ## Done when
 
 `print3d make` exits 0, no note is at `error`, you have looked at the plate PNGs,
-any likeness overlays and the hand-off renders, and the user has the `.3mf` path
-and the print sheet.
+any likeness overlays and the hand-off renders, and the user has the `.3mf` path,
+the print sheet and the plate to print on (`bed_type`).
 
 ## The machine
 
