@@ -6,6 +6,8 @@ import os
 import re
 from pathlib import Path
 
+from print3d.printers import current_printer
+
 PACKAGE = Path(__file__).resolve().parent
 JOBS_ENV = "PRINT3D_JOBS"
 NAME_RE = re.compile(r"[a-z0-9_-]{1,64}")
@@ -16,7 +18,7 @@ def repo_root() -> Path:
 
 
 def default_profiles_dir() -> Path:
-    return PACKAGE / "profiles" / "x2d-0.4"
+    return PACKAGE / "profiles" / current_printer().key
 
 
 def coupon_script() -> Path:

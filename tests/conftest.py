@@ -39,3 +39,9 @@ def write_cube_stl(path: Path, size_mm: float = 20.0) -> Path:
 @pytest.fixture
 def cube_stl(tmp_path: Path) -> Path:
     return write_cube_stl(tmp_path / "cube.stl", 20.0)
+
+
+@pytest.fixture(autouse=True)
+def _isolated_printer(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """No test reads the real ~/print3d/printer.json."""
+    monkeypatch.setenv("PRINT3D_PRINTER", str(tmp_path / "printer.json"))

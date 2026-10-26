@@ -19,6 +19,7 @@ from print3d.paths import coupon_script, default_profiles_dir, job_path, safe_na
 from print3d.photo import grid, meet
 from print3d.pipeline import _model_params, run_job
 from print3d.printability import advise, analyze_mesh, analyze_slice
+from print3d.printers import current_printer, load_printer, save_printer
 from print3d.project import inspect_project
 from print3d.studio import SliceRequest, find_studio, slice_plan
 from print3d.viewer import build_viewer
@@ -182,6 +183,23 @@ def cmd_fit(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_printer(args: argparse.Namespace) -> int:
+    if args.action == "set":
+        owned = [bed.strip() for bed in args.owned.split(",") if bed.strip()] if args.owned is not None else None
+        by_material = {}
+        for item in args.plate or []:
+            material, sep, bed = item.partition("=")
+            if not sep or not material.strip():
+                raise ValueError(f"--plate takes MATERIAL=PLATE, e.g. PLA='Cool Plate'; got {item!r}.")
+            by_material[material.strip()] = bed.strip()
+        if args.printer is None and owned is None and not by_material:
+            raise ValueError("Give at least one of --printer, --owned, --plate.")
+        _print_json(save_printer(args.printer, owned, by_material or None))
+    else:
+        _print_json(load_printer())
+    return 0
+
+
 def cmd_mcp(_args: argparse.Namespace) -> int:
     from print3d.mcp_server import main as serve
 
@@ -226,6 +244,7 @@ def cmd_flatten(args: argparse.Namespace) -> int:
 
 def cmd_status(_args: argparse.Namespace) -> int:
     profiles = default_profiles_dir()
+    printer = current_printer()
     try:
         blender = str(find_blender())
     except BlenderError as exc:
@@ -234,6 +253,9 @@ def cmd_status(_args: argparse.Namespace) -> int:
         {
             "blender": blender,
             "studio": str(find_studio()),
+            "printer": printer.key,
+            "printer_name": printer.name,
+            "beds_owned": load_printer()["owned"],
             "profiles": str(profiles),
             "profiles_present": all(
                 (profiles / name).is_file()
@@ -382,6 +404,16 @@ def build_parser() -> argparse.ArgumentParser:
     fit_set = fit_actions.add_parser("set", help="Record what the fit coupon showed, per side in mm")
     for kind in KINDS:
         fit_set.add_argument(f"--{kind}", type=float)
+
+    printer_cmd = sub.add_parser("printer", help="Show or choose the printer and the build plates you own")
+    printer_cmd.set_defaults(func=cmd_printer)
+    printer_actions = printer_cmd.add_subparsers(dest="action", required=True)
+    printer_actions.add_parser("show", help="The printer, plates and per-material plate in printer.json")
+    printer_set = printer_actions.add_parser("set", help="Record the printer and plates; unspecified settings are kept")
+    printer_set.add_argument("--printer", help="x2d-0.4 or x1c-0.4")
+    printer_set.add_argument("--owned", help="Plates you own, comma-separated, e.g. 'Textured PEI Plate,Cool Plate'")
+    printer_set.add_argument("--plate", action="append", metavar="MATERIAL=PLATE",
+                             help="Plate for a material, e.g. PLA='Cool Plate' (repeatable)")
 
     mcp_cmd = sub.add_parser("mcp", help="Run the MCP server on stdio")
     mcp_cmd.set_defaults(func=cmd_mcp)
