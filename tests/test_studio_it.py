@@ -145,11 +145,14 @@ def test_a_flush_cutter_buries_the_inlay(tmp_path: Path, monkeypatch):
     assert ("buried", "name") in {(a["code"], a["part"]) for a in report["advice"]}
 
 
-def test_fit_coupon_slices_clean(tmp_path: Path):
+@pytest.mark.parametrize("printer", ["x2d-0.4", "x1c-0.4"])
+def test_fit_coupon_slices_clean(tmp_path: Path, printer):
     from print3d.paths import coupon_script
 
+    save_printer(key=printer)
     report = run_job("fit coupon", script=coupon_script(), jobs_dir=tmp_path, execute=True)
     assert report["status"] == "ready_for_review", report["advice"]
+    assert report["printer"] == printer
     assert {p["name"] for p in report["parts"]} == {"holes", "pin"}
     assert report["model"]["non_manifold_edges"] == 0
 
@@ -198,3 +201,45 @@ def test_x1c_cube_slice_records_printer_and_bed(tmp_path: Path, cube_stl: Path):
         settings = json.loads(z.read("Metadata/project_settings.config"))
     assert settings["printer_model"] == "Bambu Lab X1 Carbon"
     assert settings["curr_bed_type"] == "Cool Plate"
+
+
+TWO_COLOUR_TAG = """\
+import bpy
+
+
+def box(sx, sy, sz, z):
+    bpy.ops.mesh.primitive_cube_add(size=1)
+    obj = bpy.context.active_object
+    obj.scale = (sx, sy, sz)
+    bpy.ops.object.transform_apply(scale=True)
+    obj.location.z = z
+    bpy.ops.object.transform_apply(location=True)
+    return obj
+
+
+body = box(40, 20, 4, 2)        # z 0 to 4
+inlay = box(30, 8, 0.6, 3.7)    # z 3.4 to 4, flush with the top
+cutter = box(30, 8, 2, 4.4)     # z 3.4 to 5.4: breaks through the top, so the inlay shows
+cut = body.modifiers.new("cut", "BOOLEAN")
+cut.operation, cut.object, cut.solver = "DIFFERENCE", cutter, "EXACT"
+bpy.context.view_layer.objects.active = body
+bpy.ops.object.modifier_apply(modifier="cut")
+bpy.data.objects.remove(cutter, do_unlink=True)
+part(body, "body", color="white")
+part(inlay, "inlay", color="black", group="body")
+"""
+
+
+def test_two_colours_on_the_x1c_single_nozzle(tmp_path: Path):
+    save_printer(key="x1c-0.4")
+    script = tmp_path / "tag.py"
+    script.write_text(TWO_COLOUR_TAG, encoding="utf-8")
+    report = run_job("a two colour tag", script=script, jobs_dir=tmp_path / "jobs", execute=True)
+    assert report["status"] == "ready_for_review", report["advice"]
+    assert {f["color"]: f["used_g"] > 0 for f in report["filaments"]} == {"white": True, "black": True}
+    [colours] = [a for a in report["advice"] if a["code"] == "colours"]
+    assert colours["severity"] == "note" and "1 nozzle" in colours["message"]
+    with zipfile.ZipFile(report["slice_result"]["output_3mf"]) as z:
+        settings = json.loads(z.read("Metadata/project_settings.config"))
+    assert settings["printer_model"] == "Bambu Lab X1 Carbon"
+    assert settings["curr_bed_type"] == "Textured PEI Plate"
