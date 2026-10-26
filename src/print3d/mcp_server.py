@@ -24,17 +24,21 @@ from print3d.paths import coupon_script, default_profiles_dir, job_path, safe_na
 from print3d.photo import grid as draw_grid
 from print3d.photo import meet as cross
 from print3d.pipeline import run_job
-from print3d.printers import BED_TYPES, current_printer, machine_facts
+from print3d.printers import BedType, PrinterError, current_printer, machine_facts
 from print3d.viewer import build_viewer
 from print3d.printability import advise, analyze_mesh, analyze_slice
 
 
 def instructions() -> str:
-    printer = current_printer()
-    bed = " x ".join(f"{v:g}" for v in machine_facts(default_profiles_dir()).bed_mm)
+    try:
+        bed = " x ".join(f"{v:g}" for v in machine_facts(default_profiles_dir()).bed_mm)
+        machine = f"a {current_printer().name} ({bed} mm bed)"
+    except (PrinterError, OSError, KeyError, ValueError):
+        # A broken printer.json or missing profiles must not take the tools down: `make` names the problem.
+        machine = "the printer `print3d status` names"
     return f"""\
-print3d turns an idea, or a photo of an object, into a Bambu Studio project for a
-{printer.name} ({bed} mm bed). You write a Blender (bpy) model script; `make` runs
+print3d turns an idea, or a photo of an object, into a Bambu Studio project for
+{machine}. You write a Blender (bpy) model script; `make` runs
 it, checks the mesh, slices it and returns advice, each note with the fix to apply
 to the script. Iterate until no note is at `error`, then hand the user the .3mf path.
 
@@ -84,12 +88,6 @@ def tool(*, images: bool = False, read_only: bool = False):
     return register
 
 
-def _with_plates(fn):
-    """Name the valid build plates in the docstring the agent reads."""
-    fn.__doc__ = fn.__doc__.replace("{plates}", ", ".join(BED_TYPES))
-    return fn
-
-
 def _json(payload: Any) -> str:
     return json.dumps(payload, indent=2)
 
@@ -110,18 +108,17 @@ def guide(topic: Literal["workflow", "modelling", "from-photo", "from-listing", 
 
 
 @tool(images=True)
-@_with_plates
 def make(
     prompt: str,
     script: str | None = None,
     mesh: str | None = None,
     color: str | None = None,
-    bed: str | None = None,
+    bed: BedType | None = None,
     dry_run: bool = False,
 ) -> list[Any]:
     """Model, check and slice. With no model yet, writes a starter model.py and names its path.
 
-    bed picks the build plate: {plates}. Omit it for the printer's choice for the material.
+    bed picks the build plate. Omit it for the printer's choice for the material.
     Returns the report, then the plate preview and any likeness overlays.
     """
     report = run_job(

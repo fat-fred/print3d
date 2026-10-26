@@ -2,9 +2,16 @@
 ever a test input now that Blender owns modelling.
 """
 
+import os
+import tempfile
 from pathlib import Path
 
 import pytest
+
+
+def pytest_configure(config: pytest.Config) -> None:
+    """Imports during collection (the MCP server's instructions) never see the real ~/print3d/printer.json."""
+    os.environ["PRINT3D_PRINTER"] = str(Path(tempfile.gettempdir()) / f"print3d-tests-{os.getpid()}" / "printer.json")
 
 
 def ascii_stl_box(sx: float, sy: float, sz: float) -> str:

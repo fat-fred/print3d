@@ -4,8 +4,9 @@ import anyio
 import pytest
 from mcp import Client
 
+from print3d import mcp_server
 from print3d.mcp_server import instructions, server
-from print3d.printers import save_printer
+from print3d.printers import BED_TYPES, save_printer
 from test_likeness import CARD_PX, L_OUTLINE, _l_part, _photo
 
 
@@ -103,3 +104,23 @@ def test_instructions_name_the_chosen_printer():
     assert "Bambu Lab X2D" in instructions()
     save_printer(key="x1c-0.4")
     assert "Bambu Lab X1 Carbon" in instructions()
+
+
+def test_instructions_survive_a_broken_printer_json(tmp_path):
+    (tmp_path / "printer.json").write_text("{not json")
+    text = instructions()
+    assert "print3d status" in text and "make" in text
+
+
+def test_import_does_not_read_the_users_printer_json():
+    # pytest_configure points PRINT3D_PRINTER at an empty path before this module is imported.
+    assert "Bambu Lab X2D" in mcp_server.INSTRUCTIONS
+
+
+def test_make_offers_the_plates_as_choices():
+    async def schema():
+        async with Client(server) as client:
+            return {t.name: t.input_schema for t in (await client.list_tools()).tools}["make"]
+
+    bed = anyio.run(schema)["properties"]["bed"]
+    assert list(BED_TYPES) in [option.get("enum") for option in bed.get("anyOf", [bed])]
