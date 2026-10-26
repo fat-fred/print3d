@@ -107,7 +107,14 @@ def run_job(
 ) -> dict[str, Any]:
     brief = parse_brief(prompt, color=color)
     printer = current_printer()
-    bed_type = bed_for(brief.material, bed)
+    profiles = profiles_dir or default_profiles_dir()
+    for required in ("machine.json", "process.json", "filament.json"):
+        if not (profiles / required).is_file():
+            raise PipelineError(
+                f"Pinned profile missing: {profiles / required}. Run: print3d flatten --printer {printer.key}"
+            )
+    # A plate the printer or the filament cannot use fails here, before any job file changes.
+    bed_type = bed_for(brief.material, bed, facts=machine_facts(profiles))
     job_dir = (jobs_dir or default_jobs_dir()) / brief.slug
     job_dir.mkdir(parents=True, exist_ok=True)
     # Modelling can overwrite meshes before a failure or a dry-run return.
@@ -124,7 +131,7 @@ def run_job(
     try:
         result = _run_job(
             brief, job_dir, report, script=script, mesh=mesh, execute=execute,
-            profiles=profiles_dir or default_profiles_dir(), bed_type=bed_type,
+            profiles=profiles, bed_type=bed_type,
         )
     except Exception as exc:
         report.update(status="failed", error=str(exc))
@@ -145,13 +152,6 @@ def _run_job(
     profiles: Path,
     bed_type: str,
 ) -> dict[str, Any]:
-    for required in ("machine.json", "process.json", "filament.json"):
-        if not (profiles / required).is_file():
-            raise PipelineError(
-                f"Pinned profile missing: {profiles / required}. "
-                f"Run: print3d flatten --printer {current_printer().key}"
-            )
-
     fits = load_fits()
     spec = load_spec(job_dir)
     if spec["dims"] or spec["unknowns"]:
@@ -183,7 +183,7 @@ def _run_job(
         return _run_parts(brief, job_dir, profiles, spec, fits, mesh_path, report, execute, bed_type)
 
     # 3. Is it even a solid?
-    dfm = require_printable(mesh_path, bed_mm=machine_facts(profiles).bed_mm)
+    dfm = require_printable(mesh_path, machine=machine_facts(profiles))
     report["dfm"] = dfm.as_dict()
     mesh_metrics = analyze_mesh(mesh_path)
     report["mesh_metrics"] = mesh_metrics
@@ -328,9 +328,9 @@ def _run_parts(
     notes: list[Advice] = []
     errors: list[str] = []
     metrics: dict[str, dict[str, Any]] = {}
-    bed_mm = machine_facts(profiles).bed_mm
+    machine = machine_facts(profiles)
     for obj in model["objects"]:
-        dfm = check_mesh(Path(obj["stl"]), bed_mm=bed_mm)
+        dfm = check_mesh(Path(obj["stl"]), machine=machine)
         errors.extend(f"{obj['name']}: {error}" for error in dfm.errors)
         metrics[obj["name"]] = analyze_mesh(Path(obj["stl"]))
         notes.extend(mesh_advice(metrics[obj["name"]], part=obj["name"]))
@@ -348,7 +348,7 @@ def _run_parts(
         )
     if errors:
         raise PipelineError("; ".join(errors))
-    note = _colour_note(len(colours), machine_facts(profiles).nozzles)
+    note = _colour_note(len(colours), machine.nozzles)
     if note:
         notes.append(note)
     report["mesh_metrics"] = metrics

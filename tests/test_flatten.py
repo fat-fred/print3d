@@ -51,4 +51,9 @@ def test_flatten_printer_uses_the_printers_leaves(tmp_path):
     )
     out = flatten_printer(PRINTERS["x1c-0.4"], output_dir=tmp_path / "out", profiles_root=root)
     assert out["provenance"]["machine"] == "Bambu Lab X1 Carbon 0.4 nozzle"
-    assert json.loads((tmp_path / "out" / "process.json").read_text())["curr_bed_type"] == "Textured PEI Plate"
+    process = json.loads((tmp_path / "out" / "process.json").read_text())
+    assert process["curr_bed_type"] == "Textured PEI Plate"
+    # The fake process does not turn supports off, so flatten does and records it.
+    assert process["enable_support"] == "0"
+    assert out["provenance"]["overrides"] == {"enable_support": "0"}
+    assert json.loads((tmp_path / "out" / "provenance.json").read_text())["overrides"] == {"enable_support": "0"}

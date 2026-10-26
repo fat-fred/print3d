@@ -15,7 +15,7 @@ from print3d.fits import KINDS, load_fits, save_fits
 from print3d.flatten import flatten_printer
 from print3d.handoff import build_handoff
 from print3d.likeness import check_job
-from print3d.paths import coupon_script, default_profiles_dir, job_path, safe_name
+from print3d.paths import PACKAGE, coupon_script, default_profiles_dir, job_path, safe_name
 from print3d.photo import grid, meet
 from print3d.pipeline import _model_params, run_job
 from print3d.printability import advise, analyze_mesh, analyze_slice
@@ -23,6 +23,7 @@ from print3d.printers import (
     BED_TYPES,
     PRINTERS,
     PrinterError,
+    bed_for,
     current_printer,
     load_printer,
     machine_facts,
@@ -247,10 +248,11 @@ def cmd_setup(args: argparse.Namespace) -> int:
 
 
 def cmd_flatten(args: argparse.Namespace) -> int:
+    # With --printer, a broken printer.json must not stand in the way of the repair.
     key = args.printer or current_printer().key
     if key not in PRINTERS:
         raise PrinterError(f"Unknown printer {key!r}. Known: {', '.join(PRINTERS)}")
-    output = Path(args.output) if args.output else default_profiles_dir().parent / key
+    output = Path(args.output) if args.output else PACKAGE / "profiles" / key
     _print_json(flatten_printer(PRINTERS[key], output_dir=output))
     return 0
 
@@ -262,6 +264,8 @@ def cmd_status(_args: argparse.Namespace) -> int:
         blender = str(find_blender())
     except BlenderError as exc:
         blender = f"missing: {exc}"
+    present = all((profiles / name).is_file() for name in ("machine.json", "process.json", "filament.json"))
+    facts = machine_facts(profiles) if present else None
     _print_json(
         {
             "blender": blender,
@@ -269,12 +273,10 @@ def cmd_status(_args: argparse.Namespace) -> int:
             "printer": printer.key,
             "printer_name": printer.name,
             "beds_owned": load_printer()["owned"],
-            "bed_mm": list(machine_facts(profiles).bed_mm),
+            **({"bed_mm": list(facts.bed_mm), "beds_supported": list(facts.beds)} if facts else {}),
             "profiles": str(profiles),
-            "profiles_present": all(
-                (profiles / name).is_file()
-                for name in ("machine.json", "process.json", "filament.json")
-            ),
+            "profiles_present": present,
+            **({} if present else {"hint": f"Run: print3d flatten --printer {printer.key}"}),
             "stops_at": "review in Bambu Studio",
         }
     )
@@ -292,6 +294,7 @@ def cmd_plan(args: argparse.Namespace) -> int:
         filaments=(profiles / "filament.json",),
         datadir=output.parent / "studio-datadir",
         output_dir=output.parent,
+        bed_type=bed_for("PLA", facts=machine_facts(profiles)),
     )
     _print_json(slice_plan(request))
     return 0

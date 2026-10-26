@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from print3d.paths import default_profiles_dir
-from print3d.printers import current_printer, machine_facts
+from print3d.printers import MachineFacts, machine_facts
 
 MAX_TRIANGLES_FAIL = 2_000_000
 MAX_TRIANGLES_WARN = 500_000
@@ -126,16 +126,17 @@ def inspect_mesh(path: Path) -> MeshStats:
     )
 
 
-def check_mesh(path: Path, *, bed_mm: tuple[float, float, float] | None = None) -> DfmReport:
-    if bed_mm is None:
-        bed_mm = machine_facts(default_profiles_dir()).bed_mm
+def check_mesh(path: Path, *, machine: MachineFacts | None = None) -> DfmReport:
+    """Checks against the bed of `machine`, by default the chosen printer's."""
+    machine = machine or machine_facts(default_profiles_dir())
+    bed_mm = machine.bed_mm
     stats = inspect_mesh(path)
     errors: list[str] = []
     warnings: list[str] = []
     if stats.volume_mm3 < MIN_VOLUME_MM3:
         errors.append(f"Volume {stats.volume_mm3:.3f} mm^3 is too small.")
     if any(stats.size_mm[i] > bed_mm[i] + 0.01 for i in range(3)):
-        errors.append(f"Size {stats.size_mm} mm exceeds {current_printer().name} bed {bed_mm} mm.")
+        errors.append(f"Size {stats.size_mm} mm exceeds {machine.model} bed {bed_mm} mm.")
     if stats.triangles > MAX_TRIANGLES_FAIL:
         errors.append(f"{stats.triangles} triangles exceeds {MAX_TRIANGLES_FAIL}.")
     elif stats.triangles > MAX_TRIANGLES_WARN:
@@ -147,8 +148,8 @@ def check_mesh(path: Path, *, bed_mm: tuple[float, float, float] | None = None) 
     return DfmReport(ok=not errors, stats=stats, errors=tuple(errors), warnings=tuple(warnings))
 
 
-def require_printable(path: Path, *, bed_mm: tuple[float, float, float] | None = None) -> DfmReport:
-    report = check_mesh(path, bed_mm=bed_mm)
+def require_printable(path: Path, *, machine: MachineFacts | None = None) -> DfmReport:
+    report = check_mesh(path, machine=machine)
     if not report.ok:
         raise DfmError("; ".join(report.errors))
     return report

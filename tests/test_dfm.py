@@ -4,7 +4,7 @@ import pytest
 
 from conftest import ascii_stl_box, ascii_stl_cube, write_cube_stl
 from print3d.dfm import DfmError, check_mesh, require_printable
-from print3d.paths import default_profiles_dir
+from print3d.paths import PACKAGE, default_profiles_dir
 from print3d.printers import machine_facts, save_printer
 
 
@@ -53,6 +53,15 @@ def test_x1c_height_limit_names_the_printer(tmp_path: Path):
     tall.write_text(ascii_stl_box(20, 20, height + 2))
     report = check_mesh(tall)
     assert not report.ok and "Bambu Lab X1 Carbon" in report.errors[0]
+    assert "250" in report.errors[0]
     ok = tmp_path / "ok.stl"
     ok.write_text(ascii_stl_box(20, 20, height - 1))
     assert check_mesh(ok).ok
+
+
+def test_size_error_names_the_printer_of_the_profiles_checked(tmp_path: Path):
+    tall = tmp_path / "tall.stl"
+    tall.write_text(ascii_stl_box(20, 20, 255))  # fits the X2D (261 mm), not the X1 Carbon (250 mm)
+    report = check_mesh(tall, machine=machine_facts(PACKAGE / "profiles" / "x1c-0.4"))
+    assert not report.ok and "Bambu Lab X1 Carbon" in report.errors[0] and "250" in report.errors[0]
+    assert check_mesh(tall).ok  # the chosen printer is still the X2D

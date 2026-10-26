@@ -12,18 +12,27 @@ import json
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, get_args
 
 from print3d.flatten import DEFAULT_BED_TYPE, DEFAULT_FILAMENT, DEFAULT_MACHINE, DEFAULT_PROCESS
 
 PRINTER_ENV = "PRINT3D_PRINTER"
 # Bambu Studio's names for the plates, as --curr-bed-type and the profiles spell them.
-BED_TYPES = ("Cool Plate", "Engineering Plate", "High Temp Plate", "Textured PEI Plate", "Supertack Plate")
+BedType = Literal["Cool Plate", "Engineering Plate", "High Temp Plate", "Textured PEI Plate", "Supertack Plate"]
+BED_TYPES: tuple[str, ...] = get_args(BedType)
+# The filament.json bed temperature per plate; "0" means the filament cannot print on it.
+BED_TEMPS = {
+    "Cool Plate": "cool_plate_temp",
+    "Engineering Plate": "eng_plate_temp",
+    "High Temp Plate": "hot_plate_temp",
+    "Textured PEI Plate": "textured_plate_temp",
+    "Supertack Plate": "supertack_plate_temp",
+}
 DEFAULT_PRINTER = "x2d-0.4"
 
 
 class PrinterError(ValueError):
-    pass
+    """Raised when printer.json, or the plate asked for, does not fit the printer."""
 
 
 @dataclass(frozen=True)
@@ -57,6 +66,7 @@ class MachineFacts:
     bed_mm: tuple[float, float, float]
     nozzles: int
     default_bed: str
+    beds: tuple[str, ...]
 
 
 def printer_path() -> Path:
@@ -77,15 +87,27 @@ def _read(path: Path) -> dict[str, Any]:
     return saved
 
 
+def _malformed(path: Path, key: str, want: str) -> PrinterError:
+    return PrinterError(f'{path}: "{key}" must be {want}. Fix it, or delete it for the {DEFAULT_PRINTER} default.')
+
+
+def _texts(values: Any) -> bool:
+    return isinstance(values, list) and all(isinstance(value, str) for value in values)
+
+
 def load_printer() -> dict[str, Any]:
     path = printer_path()
     saved = _read(path)
-    return {
-        "printer": saved.get("printer", DEFAULT_PRINTER),
-        "owned": list(saved.get("owned", [])),
-        "by_material": dict(saved.get("by_material", {})),
-        "path": str(path),
-    }
+    printer = saved.get("printer", DEFAULT_PRINTER)
+    owned = saved.get("owned", [])
+    by_material = saved.get("by_material", {})
+    if not isinstance(printer, str):
+        raise _malformed(path, "printer", 'a printer key, e.g. "x1c-0.4"')
+    if not _texts(owned):
+        raise _malformed(path, "owned", 'a list of plates, e.g. ["Textured PEI Plate"]')
+    if not (isinstance(by_material, dict) and _texts(list(by_material.values()))):
+        raise _malformed(path, "by_material", 'an object of material to plate, e.g. {"PLA": "Cool Plate"}')
+    return {"printer": printer, "owned": list(owned), "by_material": dict(by_material), "path": str(path)}
 
 
 def _check_printer(key: str) -> Printer:
@@ -100,10 +122,8 @@ def _check_bed(bed: str) -> str:
     return bed
 
 
-def _check_owned(bed: str, owned: list[str]) -> str:
-    if owned and bed not in owned:
-        raise PrinterError(f"You do not own the {bed}. Your plates are: {', '.join(owned)}.")
-    return bed
+def _remedy(material: str) -> str:
+    return f'Pass --bed (bed= in make) with one of them, or set one: print3d printer set --plate {material}="<plate>".'
 
 
 def current_printer() -> Printer:
@@ -117,13 +137,19 @@ def save_printer(
 ) -> dict[str, Any]:
     saved = load_printer()
     if key is not None:
-        saved["printer"] = _check_printer(key).key
+        saved["printer"] = key
+    _check_printer(saved["printer"])  # a stored unknown key is not written back
     if owned is not None:
-        saved["owned"] = [_check_bed(bed) for bed in dict.fromkeys(owned)]
+        saved["owned"] = list(dict.fromkeys(owned))
+    saved["owned"] = [_check_bed(bed) for bed in saved["owned"]]
     if by_material is not None:
         saved["by_material"] = {**saved["by_material"], **{m: _check_bed(b) for m, b in by_material.items()}}
-    for bed in saved["by_material"].values():
-        _check_owned(_check_bed(bed), saved["owned"])
+    for material, bed in saved["by_material"].items():
+        if saved["owned"] and _check_bed(bed) not in saved["owned"]:
+            raise PrinterError(
+                f"{material} is set to the {bed}, which is not among your plates ({', '.join(saved['owned'])}). "
+                f"Change it with --plate {material}=\"<plate>\", or add the {bed} to --owned."
+            )
     path = printer_path()
     path.parent.mkdir(parents=True, exist_ok=True)
     kept = {k: saved[k] for k in ("printer", "owned", "by_material")}
@@ -131,17 +157,36 @@ def save_printer(
     return load_printer()
 
 
-def bed_for(material: str, bed: str | None = None) -> str:
-    """The plate to print on: the one asked for, else the one set for the material, else the printer's own."""
+def bed_for(material: str, bed: str | None = None, *, facts: MachineFacts) -> str:
+    """The plate to print on: the one asked for, else the one set for the material, else the printer's default.
+
+    Refused unless you own it and the printer and its pinned filament can print on it.
+    """
     saved = load_printer()
-    chosen = bed or saved["by_material"].get(material) or current_printer().bed_type
-    return _check_owned(_check_bed(chosen), saved["owned"])
+    chosen = _check_bed(bed or saved["by_material"].get(material) or facts.default_bed)
+    if saved["owned"] and chosen not in saved["owned"]:
+        raise PrinterError(
+            f"You do not own the {chosen}. Your plates are: {', '.join(saved['owned'])}. {_remedy(material)}"
+        )
+    if chosen not in facts.beds:
+        raise PrinterError(
+            f"The {facts.model} with its pinned filament cannot print on the {chosen}. "
+            f"Plates it can print on: {', '.join(facts.beds)}. {_remedy(material)}"
+        )
+    return chosen
+
+
+def _zero(value: Any) -> bool:
+    values = value if isinstance(value, list) else [value]
+    return bool(values) and all(str(v).strip() == "0" for v in values)
 
 
 def machine_facts(profiles_dir: Path) -> MachineFacts:
-    """What the pinned machine.json says about the printer: bed size, nozzles, default plate."""
+    """What the pinned profiles say about the printer: bed size, nozzles, default plate, usable plates."""
     machine = json.loads((profiles_dir / "machine.json").read_text(encoding="utf-8"))
+    filament = json.loads((profiles_dir / "filament.json").read_text(encoding="utf-8"))
     corners = [tuple(float(v) for v in point.strip().split("x")) for point in machine["printable_area"]]
+    unsupported = {bed.strip() for bed in (machine.get("not_support_bed_type") or "").split(";")}
     return MachineFacts(
         model=machine["printer_model"],
         bed_mm=(
@@ -151,4 +196,5 @@ def machine_facts(profiles_dir: Path) -> MachineFacts:
         ),
         nozzles=len(machine["nozzle_diameter"]),
         default_bed=machine["default_bed_type"],
+        beds=tuple(bed for bed in BED_TYPES if bed not in unsupported and not _zero(filament.get(BED_TEMPS[bed]))),
     )
