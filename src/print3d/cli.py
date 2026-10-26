@@ -289,7 +289,7 @@ def cmd_plan(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        prog="print3d", description="Idea to a reviewable Bambu Studio project for an X2D"
+        prog="print3d", description="Idea to a reviewable Bambu Studio project for a Bambu Lab printer"
     )
     sub = parser.add_subparsers(dest="cmd", required=True)
 

@@ -20,18 +20,23 @@ from print3d import spec as specs
 from print3d.fits import load_fits, save_fits
 from print3d.handoff import build_handoff
 from print3d.likeness import check_job
-from print3d.paths import coupon_script, job_path, safe_name, skill_dir
+from print3d.paths import coupon_script, default_profiles_dir, job_path, safe_name, skill_dir
 from print3d.photo import grid as draw_grid
 from print3d.photo import meet as cross
 from print3d.pipeline import run_job
+from print3d.printers import current_printer, machine_facts
 from print3d.viewer import build_viewer
 from print3d.printability import advise, analyze_mesh, analyze_slice
 
-INSTRUCTIONS = """\
+
+def instructions() -> str:
+    printer = current_printer()
+    bed = " x ".join(f"{v:g}" for v in machine_facts(default_profiles_dir()).bed_mm)
+    return f"""\
 print3d turns an idea, or a photo of an object, into a Bambu Studio project for a
-Bambu Lab X2D. You write a Blender (bpy) model script; `make` runs it, checks the
-mesh, slices it and returns advice, each note with the fix to apply to the script.
-Iterate until no note is at `error`, then hand the user the .3mf path.
+{printer.name} ({bed} mm bed). You write a Blender (bpy) model script; `make` runs
+it, checks the mesh, slices it and returns advice, each note with the fix to apply
+to the script. Iterate until no note is at `error`, then hand the user the .3mf path.
 
 Read guide("workflow") before the first run. From a photo of an object, also read
 guide("from-photo"): it records every dimension with its evidence and adds a
@@ -43,6 +48,9 @@ to share. Each run also writes `viewer`, an HTML page with the model in 3D: open
 it in your preview pane when you have one, or give the user its path. Nothing
 here sends anything to the printer.
 """
+
+
+INSTRUCTIONS = instructions()
 
 GUIDES = {
     "workflow": "SKILL.md",

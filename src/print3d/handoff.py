@@ -20,6 +20,7 @@ from print3d.blender import BlenderError
 from print3d.filaments import DEFAULT_COLOUR, colour_hex
 from print3d.fits import load_fits
 from print3d.paths import default_profiles_dir
+from print3d.printers import current_printer
 from print3d.render import render_parts
 from print3d.spec import load_spec
 
@@ -42,6 +43,13 @@ VERDICTS = {
 
 class HandoffError(RuntimeError):
     """Raised when a job has no sliced run to hand off."""
+
+
+def machine_line(report: dict[str, Any]) -> str:
+    """The printer and settings the sheet says the part was sliced for."""
+    name = report.get("printer_name") or current_printer().name
+    bed = report.get("bed_type") or current_printer().bed_type
+    return f"{name}, 0.4 mm nozzle, 0.20 mm layers, Bambu PLA Basic, {bed}, supports off"
 
 
 def _esc(value: Any) -> str:
@@ -315,8 +323,7 @@ footer {{ margin-top:32px; color:var(--muted); font-size:12px; border-top:1px so
 <header>
   <div>
     <h1>{_esc(report["brief"]["prompt"])}</h1>
-    <p class="sub">{_esc(slug)} · {time.strftime("%Y-%m-%d")} · Bambu Lab X2D, 0.4 mm nozzle, 0.20 mm layers,
-    Bambu PLA Basic, textured PEI, supports off</p>
+    <p class="sub">{_esc(slug)} · {time.strftime("%Y-%m-%d")} · {_esc(machine_line(report))}</p>
     {replaces}
   </div>
   <span class="badge">{'Ready to print' if ready else 'Needs work'}</span>

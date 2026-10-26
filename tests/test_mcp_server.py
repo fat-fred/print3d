@@ -4,7 +4,8 @@ import anyio
 import pytest
 from mcp import Client
 
-from print3d.mcp_server import server
+from print3d.mcp_server import instructions, server
+from print3d.printers import save_printer
 from test_likeness import CARD_PX, L_OUTLINE, _l_part, _photo
 
 
@@ -96,3 +97,9 @@ def test_only_read_tools_skip_the_prompt():
                     if t.annotations and t.annotations.read_only_hint}
 
     assert anyio.run(hints) == {"guide", "show_spec", "meet", "grid", "check", "likeness", "view"}
+
+
+def test_instructions_name_the_chosen_printer():
+    assert "Bambu Lab X2D" in instructions()
+    save_printer(key="x1c-0.4")
+    assert "Bambu Lab X1 Carbon" in instructions()

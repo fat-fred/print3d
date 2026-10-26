@@ -8,7 +8,9 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
-X2D_BED_MM = (256.0, 256.0, 260.0)
+from print3d.paths import default_profiles_dir
+from print3d.printers import current_printer, machine_facts
+
 MAX_TRIANGLES_FAIL = 2_000_000
 MAX_TRIANGLES_WARN = 500_000
 MIN_VOLUME_MM3 = 1.0
@@ -124,14 +126,16 @@ def inspect_mesh(path: Path) -> MeshStats:
     )
 
 
-def check_mesh(path: Path, *, bed_mm: tuple[float, float, float] = X2D_BED_MM) -> DfmReport:
+def check_mesh(path: Path, *, bed_mm: tuple[float, float, float] | None = None) -> DfmReport:
+    if bed_mm is None:
+        bed_mm = machine_facts(default_profiles_dir()).bed_mm
     stats = inspect_mesh(path)
     errors: list[str] = []
     warnings: list[str] = []
     if stats.volume_mm3 < MIN_VOLUME_MM3:
         errors.append(f"Volume {stats.volume_mm3:.3f} mm^3 is too small.")
     if any(stats.size_mm[i] > bed_mm[i] + 0.01 for i in range(3)):
-        errors.append(f"Size {stats.size_mm} mm exceeds X2D bed {bed_mm} mm.")
+        errors.append(f"Size {stats.size_mm} mm exceeds {current_printer().name} bed {bed_mm} mm.")
     if stats.triangles > MAX_TRIANGLES_FAIL:
         errors.append(f"{stats.triangles} triangles exceeds {MAX_TRIANGLES_FAIL}.")
     elif stats.triangles > MAX_TRIANGLES_WARN:

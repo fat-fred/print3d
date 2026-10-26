@@ -2,8 +2,8 @@
 
 Colour is the only thing that changes: the material stays the pinned Bambu PLA
 Basic, so every check and the slice keep meaning the same thing. Studio puts
-the first two filaments on the X2D's two nozzles; a third or more is swapped in
-on one of them, with a purge per change.
+the first filaments on the printer's nozzles (two on an X2D, one on an X1 Carbon);
+any beyond that are swapped in on one of them, with a purge per change.
 """
 
 from __future__ import annotations

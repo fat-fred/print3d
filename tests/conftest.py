@@ -7,18 +7,18 @@ from pathlib import Path
 import pytest
 
 
-def ascii_stl_cube(size_mm: float = 20.0) -> str:
-    s = float(size_mm)
+def ascii_stl_box(sx: float, sy: float, sz: float) -> str:
+    x, y, z = float(sx), float(sy), float(sz)
     corners = [
-        (0, 0, 0), (s, 0, 0), (s, s, 0), (0, s, 0),
-        (0, 0, s), (s, 0, s), (s, s, s), (0, s, s),
+        (0, 0, 0), (x, 0, 0), (x, y, 0), (0, y, 0),
+        (0, 0, z), (x, 0, z), (x, y, z), (0, y, z),
     ]
     faces = [
         (0, 3, 2, 1, (0, 0, -1)), (4, 5, 6, 7, (0, 0, 1)),
         (0, 1, 5, 4, (0, -1, 0)), (2, 3, 7, 6, (0, 1, 0)),
         (1, 2, 6, 5, (1, 0, 0)), (3, 0, 4, 7, (-1, 0, 0)),
     ]
-    lines = ["solid cube"]
+    lines = ["solid box"]
     for a, b, c, d, normal in faces:
         for tri in ((a, b, c), (a, c, d)):
             lines.append("  facet normal %g %g %g" % normal)
@@ -26,8 +26,12 @@ def ascii_stl_cube(size_mm: float = 20.0) -> str:
             lines.extend("      vertex %g %g %g" % corners[i] for i in tri)
             lines.append("    endloop")
             lines.append("  endfacet")
-    lines.append("endsolid cube")
+    lines.append("endsolid box")
     return "\n".join(lines) + "\n"
+
+
+def ascii_stl_cube(size_mm: float = 20.0) -> str:
+    return ascii_stl_box(size_mm, size_mm, size_mm)
 
 
 def write_cube_stl(path: Path, size_mm: float = 20.0) -> Path:

@@ -2,8 +2,10 @@ from pathlib import Path
 
 import pytest
 
-from conftest import ascii_stl_cube, write_cube_stl
+from conftest import ascii_stl_box, ascii_stl_cube, write_cube_stl
 from print3d.dfm import DfmError, check_mesh, require_printable
+from print3d.paths import default_profiles_dir
+from print3d.printers import machine_facts, save_printer
 
 
 def test_cube_is_printable(tmp_path: Path):
@@ -42,3 +44,15 @@ def test_oversize_fails(tmp_path: Path):
     report = check_mesh(path)
     assert not report.ok
     assert any("exceeds" in error for error in report.errors)
+
+
+def test_x1c_height_limit_names_the_printer(tmp_path: Path):
+    save_printer(key="x1c-0.4")
+    height = machine_facts(default_profiles_dir()).bed_mm[2]
+    tall = tmp_path / "tall.stl"
+    tall.write_text(ascii_stl_box(20, 20, height + 2))
+    report = check_mesh(tall)
+    assert not report.ok and "Bambu Lab X1 Carbon" in report.errors[0]
+    ok = tmp_path / "ok.stl"
+    ok.write_text(ascii_stl_box(20, 20, height - 1))
+    assert check_mesh(ok).ok

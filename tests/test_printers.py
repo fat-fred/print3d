@@ -4,8 +4,9 @@ import pytest
 
 import print3d.paths
 from print3d.cli import main
+from print3d.handoff import machine_line
 from print3d.paths import PACKAGE, default_profiles_dir
-from print3d.pipeline import PipelineError, run_job
+from print3d.pipeline import PipelineError, _colour_note, run_job
 from print3d.printers import PrinterError, bed_for, current_printer, machine_facts, save_printer
 
 
@@ -102,3 +103,17 @@ def test_machine_facts_of_pinned_x1c():
     assert facts.nozzles == 1
     assert facts.bed_mm[:2] == (256.0, 256.0)
     assert json.loads((profiles / "process.json").read_text())["enable_support"] == "0"
+
+
+def test_colour_note_one_nozzle_mentions_ams():
+    note = _colour_note(2, 1)
+    assert note.code == "colours" and note.severity == "note" and "AMS" in note.message
+    assert _colour_note(2, 2) is None
+    assert _colour_note(3, 2).message.startswith("3 colours on 2 nozzles")
+
+
+def test_machine_line_from_report_and_fallback():
+    assert machine_line({"printer_name": "Bambu Lab X1 Carbon", "bed_type": "Cool Plate"}) == (
+        "Bambu Lab X1 Carbon, 0.4 mm nozzle, 0.20 mm layers, Bambu PLA Basic, Cool Plate, supports off"
+    )
+    assert machine_line({}).startswith("Bambu Lab X2D, ")

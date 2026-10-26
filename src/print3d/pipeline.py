@@ -19,7 +19,7 @@ from typing import Any
 from print3d.blender import BlenderError, run_model_script, scaffold_script
 from print3d.brief import PrintBrief, parse_brief
 from print3d.dfm import check_mesh, require_printable
-from print3d.filaments import DEFAULT_COLOUR, NOZZLES, colour_hex, job_filaments
+from print3d.filaments import DEFAULT_COLOUR, colour_hex, job_filaments
 from print3d.fits import fit_advice, load_fits
 from print3d.likeness import check_likeness, likeness_advice
 from print3d.paths import default_jobs_dir, default_profiles_dir
@@ -34,7 +34,7 @@ from print3d.printability import (
     with_clean,
     worst_severity,
 )
-from print3d.printers import current_printer
+from print3d.printers import current_printer, machine_facts
 from print3d.project import extract_plate_png, inspect_project
 from print3d.spec import load_spec, model_dims
 from print3d.studio import SliceRequest, assemble_list, run_slice, slice_plan
@@ -259,6 +259,25 @@ def _run_job(
     return report
 
 
+def _colour_note(colours: int, nozzles: int) -> Advice | None:
+    if colours <= nozzles:
+        return None
+    if nozzles == 1:
+        return Advice(
+            "colours",
+            "note",
+            f"{colours} colours on 1 nozzle: every colour change is an AMS filament swap with a purge.",
+            "Needs an AMS; group colours by layer to limit swaps.",
+        )
+    return Advice(
+        "colours",
+        "note",
+        f"{colours} colours on {nozzles} nozzles: Studio swaps filament within a nozzle, "
+        "purging at every change.",
+        "Fine with an AMS; otherwise keep to two colours per plate.",
+    )
+
+
 def _run_parts(
     brief: PrintBrief,
     job_dir: Path,
@@ -315,16 +334,9 @@ def _run_parts(
         )
     if errors:
         raise PipelineError("; ".join(errors))
-    if len(colours) > NOZZLES:
-        notes.append(
-            Advice(
-                "colours",
-                "note",
-                f"{len(colours)} colours on {NOZZLES} nozzles: Studio swaps filament within a nozzle, "
-                "purging at every change.",
-                "Fine with an AMS; otherwise keep to two colours per plate.",
-            )
-        )
+    note = _colour_note(len(colours), machine_facts(profiles).nozzles)
+    if note:
+        notes.append(note)
     report["mesh_metrics"] = metrics
 
     likeness = check_likeness(assembly, spec, job_dir / "likeness")
