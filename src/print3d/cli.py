@@ -12,14 +12,14 @@ from print3d.brief import parse_brief
 from print3d import setup as installer
 from print3d import spec as specs
 from print3d.fits import KINDS, load_fits, save_fits
-from print3d.flatten import flatten_x2d
+from print3d.flatten import flatten_printer
 from print3d.handoff import build_handoff
 from print3d.likeness import check_job
 from print3d.paths import coupon_script, default_profiles_dir, job_path, safe_name
 from print3d.photo import grid, meet
 from print3d.pipeline import _model_params, run_job
 from print3d.printability import advise, analyze_mesh, analyze_slice
-from print3d.printers import current_printer, load_printer, save_printer
+from print3d.printers import PRINTERS, PrinterError, current_printer, load_printer, save_printer
 from print3d.project import inspect_project
 from print3d.studio import SliceRequest, find_studio, slice_plan
 from print3d.viewer import build_viewer
@@ -238,7 +238,11 @@ def cmd_setup(args: argparse.Namespace) -> int:
 
 
 def cmd_flatten(args: argparse.Namespace) -> int:
-    _print_json(flatten_x2d(output_dir=Path(args.output) if args.output else default_profiles_dir()))
+    key = args.printer or current_printer().key
+    if key not in PRINTERS:
+        raise PrinterError(f"Unknown printer {key!r}. Known: {', '.join(PRINTERS)}")
+    output = Path(args.output) if args.output else default_profiles_dir().parent / key
+    _print_json(flatten_printer(PRINTERS[key], output_dir=output))
     return 0
 
 
@@ -425,7 +429,8 @@ def build_parser() -> argparse.ArgumentParser:
     setup_cmd.add_argument("--yes", action="store_true", help="Apply without asking")
     setup_cmd.set_defaults(func=cmd_setup)
 
-    flatten_cmd = sub.add_parser("flatten", help="Rebuild pinned X2D Studio profiles")
+    flatten_cmd = sub.add_parser("flatten", help="Rebuild pinned Studio profiles for a printer")
+    flatten_cmd.add_argument("--printer", help="printer key (default: the chosen printer)")
     flatten_cmd.add_argument("--output")
     flatten_cmd.set_defaults(func=cmd_flatten)
 

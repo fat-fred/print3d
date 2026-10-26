@@ -1,0 +1,15 @@
+Pinned Bambu Studio profiles for Bambu Lab X1 Carbon 0.4 mm.
+
+Studio version: 02.08.02.61
+Source tree: /Applications/BambuStudio.app/Contents/Resources/profiles/BBL
+Machine: Bambu Lab X1 Carbon 0.4 nozzle
+Process: 0.20mm Standard @BBL X1C
+Filament: Bambu PLA Basic @BBL X1C
+Bed: Textured PEI Plate
+
+These JSON files are flattened (inherits + include resolved, from=User)
+because the Studio CLI does not walk the GUI inheritance chain.
+enable_support is "0" in the system profile; no override was needed.
+
+Rebuild with: print3d flatten --printer x1c-0.4
+Golden cube slice: pending (Task 5)

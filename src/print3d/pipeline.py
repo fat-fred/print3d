@@ -34,6 +34,7 @@ from print3d.printability import (
     with_clean,
     worst_severity,
 )
+from print3d.printers import current_printer
 from print3d.project import extract_plate_png, inspect_project
 from print3d.spec import load_spec, model_dims
 from print3d.studio import SliceRequest, assemble_list, run_slice, slice_plan
@@ -136,7 +137,8 @@ def _run_job(
     for required in ("machine.json", "process.json", "filament.json"):
         if not (profiles / required).is_file():
             raise PipelineError(
-                f"Pinned profile missing: {profiles / required}. Run: python -m print3d flatten"
+                f"Pinned profile missing: {profiles / required}. "
+                f"Run: print3d flatten --printer {current_printer().key}"
             )
 
     fits = load_fits()

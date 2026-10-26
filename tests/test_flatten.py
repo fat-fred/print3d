@@ -1,6 +1,18 @@
+import json
 from pathlib import Path
 
-from print3d.flatten import build_name_index, flatten_by_name, normalize_for_cli
+from print3d.flatten import build_name_index, flatten_by_name, flatten_printer, normalize_for_cli
+from print3d.printers import PRINTERS
+
+
+def _fake_bbl_tree(tmp_path: Path, *, machine: str, process: str, filament: str) -> Path:
+    for kind, name in (("machine", machine), ("process", process), ("filament", filament)):
+        folder = tmp_path / "BBL" / kind
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / f"{name}.json").write_text(
+            json.dumps({"type": kind, "name": name, "from": "system"}) + "\n", encoding="utf-8"
+        )
+    return tmp_path
 
 
 def test_inherits_and_include(tmp_path: Path):
@@ -28,3 +40,15 @@ def test_inherits_and_include(tmp_path: Path):
     assert flat["inherits"] == "leaf"
     assert flat["printer_settings_id"] == "leaf"
     assert "include" not in flat
+
+
+def test_flatten_printer_uses_the_printers_leaves(tmp_path):
+    root = _fake_bbl_tree(
+        tmp_path,
+        machine="Bambu Lab X1 Carbon 0.4 nozzle",
+        process="0.20mm Standard @BBL X1C",
+        filament="Bambu PLA Basic @BBL X1C",
+    )
+    out = flatten_printer(PRINTERS["x1c-0.4"], output_dir=tmp_path / "out", profiles_root=root)
+    assert out["provenance"]["machine"] == "Bambu Lab X1 Carbon 0.4 nozzle"
+    assert json.loads((tmp_path / "out" / "process.json").read_text())["curr_bed_type"] == "Textured PEI Plate"

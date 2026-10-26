@@ -2,8 +2,10 @@ import json
 
 import pytest
 
+import print3d.paths
 from print3d.cli import main
 from print3d.paths import PACKAGE, default_profiles_dir
+from print3d.pipeline import PipelineError, run_job
 from print3d.printers import PrinterError, bed_for, current_printer, machine_facts, save_printer
 
 
@@ -84,3 +86,19 @@ def test_cli_printer_set_and_show(capsys):
 def test_cli_printer_error_is_a_message(capsys):
     assert main(["printer", "set", "--printer", "p1s-0.4"]) == 1
     assert "x1c-0.4" in capsys.readouterr().err
+
+
+def test_missing_profiles_name_the_flatten_command(tmp_path, monkeypatch, cube_stl):
+    monkeypatch.setattr(print3d.paths, "PACKAGE", tmp_path)  # no profiles/ under it
+    save_printer(key="x1c-0.4")
+    with pytest.raises(PipelineError, match=r"print3d flatten --printer x1c-0.4"):
+        run_job("cube", mesh=cube_stl, jobs_dir=tmp_path / "jobs", execute=False)
+
+
+def test_machine_facts_of_pinned_x1c():
+    profiles = PACKAGE / "profiles" / "x1c-0.4"
+    facts = machine_facts(profiles)
+    assert facts.model == "Bambu Lab X1 Carbon"
+    assert facts.nozzles == 1
+    assert facts.bed_mm[:2] == (256.0, 256.0)
+    assert json.loads((profiles / "process.json").read_text())["enable_support"] == "0"

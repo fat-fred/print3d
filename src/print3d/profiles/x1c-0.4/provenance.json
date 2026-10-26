@@ -1,0 +1,15 @@
+{
+  "profiles_root": "/Applications/BambuStudio.app/Contents/Resources/profiles",
+  "machine": "Bambu Lab X1 Carbon 0.4 nozzle",
+  "process": "0.20mm Standard @BBL X1C",
+  "filaments": [
+    "Bambu PLA Basic @BBL X1C"
+  ],
+  "bed_type": "Textured PEI Plate",
+  "cli_overlay_applied": false,
+  "machine_keys": 114,
+  "process_keys": 197,
+  "filament_keys": [
+    138
+  ]
+}

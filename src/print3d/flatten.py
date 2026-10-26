@@ -10,7 +10,10 @@ import json
 import os
 import re
 from pathlib import Path
-from typing import Any, Iterable, Literal
+from typing import TYPE_CHECKING, Any, Iterable, Literal
+
+if TYPE_CHECKING:
+    from print3d.printers import Printer
 
 ProfileKind = Literal["machine", "process", "filament"]
 META_SKIP = {"inherits", "include", "instantiation", "setting_id", "is_custom_defined"}
@@ -280,3 +283,36 @@ def flatten_x2d(
         "filament_paths": [str(path) for path in filament_paths],
         "provenance": provenance,
     }
+
+
+def flatten_printer(
+    printer: Printer,
+    *,
+    output_dir: Path,
+    profiles_root: Path | None = None,
+    slicer_path: str | None = None,
+) -> dict[str, Any]:
+    """Flatten the profiles a listed printer slices with.
+
+    print3d's overhang check assumes supports are off, so a system profile that
+    turns them on is switched off here and the change is recorded.
+    """
+    result = flatten_x2d(
+        profiles_root=profiles_root,
+        output_dir=output_dir,
+        machine_leaf=printer.machine,
+        process_leaf=printer.process,
+        filament_leaves=[printer.filament],
+        bed_type=printer.bed_type,
+        slicer_path=slicer_path,
+    )
+    process_path = Path(result["process_path"])
+    process = load_json(process_path)
+    if process.get("enable_support") != "0":
+        process["enable_support"] = "0"
+        write_profile(process_path, process)
+        result["provenance"]["overrides"] = {"enable_support": "0"}
+        (output_dir / "provenance.json").write_text(
+            json.dumps(result["provenance"], indent=2) + "\n", encoding="utf-8"
+        )
+    return result
